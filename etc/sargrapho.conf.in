@@ -1,0 +1,15 @@
+# Where to store web pages.
+HTML_OUTPUT_DIR=THE_HTMLDIR
+
+# The file containing hosts for SarGraphO to graph. List one per line.
+HOSTS_FILE=THE_PREFIX/etc/hosts
+
+# Where to store the Round Robin Databases.
+RRD_OUTPUT_DIR=THE_PREFIX/var/rrd
+
+# How often sar data is collected on the hosts in seconds.
+STEP=600
+
+# Graph dimensions
+GRAPH_WIDTH=640
+GRAPH_HEIGHT=160

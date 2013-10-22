@@ -1,0 +1,97 @@
+#!/bin/bash
+
+trap on_exit EXIT
+
+on_exit () {
+  rm -f $STAGED_HTML_INDEX
+}
+
+which rrdtool >/dev/null 2>&1 || {
+  logit ERROR "rrdtool not found."
+  exit 1
+}
+
+[ -e $HOSTS_FILE ] || {
+  logit ERROR "Cannot read ${HOSTS_FILE}."
+  exit 1
+}
+
+[ -d $HTML_OUTPUT_DIR ] || {
+  logit INFO "Creating HTML output directory ${HTML_OUTPUT_DIR}."
+  mkdir -p $HTML_OUTPUT_DIR/{combined,hosts} || exit 1
+}
+
+STAGED_HTML_INDEX=$(mktemp)
+HTML_INDEX="${HTML_OUTPUT_DIR}/index.html"
+m4 -I $TEMPLATE_DIR $TEMPLATE_DIR/root_header.m4 > $STAGED_HTML_INDEX
+
+for HOST in $(grep -v ^# $HOSTS_FILE | awk '{print $1}')
+do
+  logit INFO "Processing ${HOST}."
+
+  # Initialize any hosts not seen before. 
+  [ -d ${RRD_OUTPUT_DIR}/${HOST} ] || {
+    logit INFO "First time seeing ${HOST}.  Initializing $HOST."
+    $LIBEXEC_DIR/init-host $HOST || {
+      logit ERROR "Could not initialize $HOST."
+      continue
+    }
+  }
+
+  logit INFO "Fetching sar data from ${HOST}."
+  $LIBEXEC_DIR/fetch-sar-data-from-host $HOST || logit ERROR "Could not fetch sar data for ${HOST}."
+
+  # Make a home for the graphs.
+  HOST_HTML_OUTPUT_DIR="${HTML_OUTPUT_DIR}/hosts/${HOST}"
+  [ -d $HOST_HTML_OUTPUT_DIR ] || mkdir -p $HOST_HTML_OUTPUT_DIR
+
+  # Make the graphs.
+  logit INFO "Graphing ${HOST}."
+  $LIBEXEC_DIR/graph-host $HOST
+
+  # Make the host HTML.
+  m4 -I $TEMPLATE_DIR -DHOST=$HOST $TEMPLATE_DIR/host_header.m4 > $HOST_HTML_OUTPUT_DIR/index.html
+
+  for METRIC in $METRICS
+  do
+    m4 -I $TEMPLATE_DIR -DHOST=$HOST -DMETRIC=$METRIC $TEMPLATE_DIR/host_header.m4 > $HOST_HTML_OUTPUT_DIR/${METRIC}.html
+    m4 -I $TEMPLATE_DIR -DHOST=$HOST -DMETRIC=$METRIC $TEMPLATE_DIR/host_metric.m4 >> $HOST_HTML_OUTPUT_DIR/${METRIC}.html
+    m4 -I $TEMPLATE_DIR -DHOST=$HOST -DMETRIC=$METRIC -DLAST_UPDATED="$(date)" $TEMPLATE_DIR/host_footer.m4 >> $HOST_HTML_OUTPUT_DIR/${METRIC}.html
+
+    # Insert HOST html into the top level index.html
+    m4 -I $TEMPLATE_DIR -DHOST=$HOST -DMETRIC=$METRIC $TEMPLATE_DIR/host_metric.m4 >> $HOST_HTML_OUTPUT_DIR/index.html
+  done # METRIC
+
+  m4 -I $TEMPLATE_DIR -DHOST=$HOST -DLAST_UPDATED="$(date)" $TEMPLATE_DIR/host_footer.m4 >> $HOST_HTML_OUTPUT_DIR/index.html
+
+  ((INDEX++))
+  ODD_OR_EVEN="even"
+  [ $(($INDEX % 2)) -eq 1 ] && ODD_OR_EVEN="odd"
+
+  m4 -I $TEMPLATE_DIR -D HOST=$HOST -DODD_OR_EVEN=$ODD_OR_EVEN $TEMPLATE_DIR/root_host.m4 >> $STAGED_HTML_INDEX
+  logit INFO "Finished processing ${HOST}."
+done # HOST
+
+m4 -I $TEMPLATE_DIR -DLAST_UPDATED="$(date)" $TEMPLATE_DIR/root_footer.m4 >> $STAGED_HTML_INDEX
+chmod 644 $STAGED_HTML_INDEX
+cp $TEMPLATE_DIR/style.css $HTML_OUTPUT_DIR/
+mv $STAGED_HTML_INDEX $HTML_INDEX
+
+# Populate the combined metrics HTML.
+for PERIOD in day week month year
+do
+  for METRIC in $METRICS
+  do
+    METRIC_PERIOD_HTML="$HTML_OUTPUT_DIR/combined/${METRIC}-${PERIOD}.html"
+
+    m4 -I $TEMPLATE_DIR -DMETRIC=$METRIC -DPERIOD=$PERIOD $TEMPLATE_DIR/combined_header.m4 > $METRIC_PERIOD_HTML
+    for IMAGE in $(ls $HTML_OUTPUT_DIR/hosts/*/${METRIC}-${PERIOD}.png 2>/dev/null | sed "s#$HTML_OUTPUT_DIR#..#")
+    do
+      LINK=$(echo $IMAGE | sed "s#${METRIC}-${PERIOD}.png#${METRIC}.html#")
+      HOST=$(echo $IMAGE | cut -d'/' -f3)
+      m4 -I $TEMPLATE_DIR -DIMAGE=$IMAGE -DLINK=$LINK -DHOST=$HOST -DMETRIC=$METRIC $TEMPLATE_DIR/combined_image.m4 >> $METRIC_PERIOD_HTML
+    done # IMAGE
+    m4 -I $TEMPLATE_DIR -DLAST_UPDATED="$(date)" $TEMPLATE_DIR/combined_footer.m4 >> $METRIC_PERIOD_HTML
+
+  done # METRIC
+done # PERIOD

@@ -1,0 +1,77 @@
+#!/bin/bash
+
+HOST=$1
+HOST_RRD_OUTPUT_DIR="${RRD_OUTPUT_DIR}/${HOST}"
+mkdir -p ${HOST_RRD_OUTPUT_DIR} 2>/dev/null || exit 1
+
+# Set the start time to 30 days ago.
+START=$(($(date +%s) - 2592000))
+
+# sar -b 
+# 12:00:01 AM       tps      rtps      wtps   bread/s   bwrtn/s
+rrdtool create ${HOST_RRD_OUTPUT_DIR}/io.rrd \
+  --start $START \
+  --step $STEP \
+  DS:tps:GAUGE:1200:0:U \
+  DS:rtps:GAUGE:1200:0:U \
+  DS:wtps:GAUGE:1200:0:U \
+  DS:bread:GAUGE:1200:0:U \
+  DS:bwrtn:GAUGE:1200:0:U \
+  RRA:AVERAGE:0.5:1:144 \
+  RRA:AVERAGE:0.5:3:1536 \
+  RRA:AVERAGE:0.5:12:4440
+
+# sar -p
+# 12:00:01 AM     CPU     %user     %nice   %system   %iowait    %steal     %idle
+rrdtool create ${HOST_RRD_OUTPUT_DIR}/cpu.rrd \
+  --start $START \
+  --step $STEP \
+  DS:pctuser:GAUGE:1200:0:100 \
+  DS:pctnice:GAUGE:1200:0:100 \
+  DS:pctsystem:GAUGE:1200:0:100 \
+  DS:pctiowait:GAUGE:1200:0:100 \
+  DS:pctsteal:GAUGE:1200:0:100 \
+  DS:pctidle:GAUGE:1200:0:100 \
+  RRA:AVERAGE:0.5:1:144 \
+  RRA:AVERAGE:0.5:3:1536 \
+  RRA:AVERAGE:0.5:12:4440
+
+# sar -q
+# 12:00:01 AM   runq-sz  plist-sz   ldavg-1   ldavg-5  ldavg-15   blocked
+rrdtool create ${HOST_RRD_OUTPUT_DIR}/load.rrd \
+  --start $START \
+  --step $STEP \
+  DS:ldavg:GAUGE:1200:0:U \
+  RRA:AVERAGE:0.5:1:144 \
+  RRA:AVERAGE:0.5:3:1536 \
+  RRA:AVERAGE:0.5:12:4440
+
+# sar -S
+# 12:00:01 AM kbswpfree kbswpused  %swpused  kbswpcad   %swpcad
+rrdtool create ${HOST_RRD_OUTPUT_DIR}/swap.rrd \
+  --start $START \
+  --step $STEP \
+  DS:kbswpfree:GAUGE:1200:0:U \
+  DS:kbswpused:GAUGE:1200:0:U \
+  DS:pctswpused:GAUGE:1200:0:100 \
+  DS:kbswpcad:GAUGE:1200:0:U \
+  DS:pctswpcad:GAUGE:1200:0:100 \
+  RRA:AVERAGE:0.5:1:144 \
+  RRA:AVERAGE:0.5:3:1536 \
+  RRA:AVERAGE:0.5:12:4440
+
+# sar -r
+# 12:00:01 AM kbmemfree kbmemused  %memused kbbuffers  kbcached  kbcommit   %commit
+rrdtool create ${HOST_RRD_OUTPUT_DIR}/memory.rrd \
+  --start $START \
+  --step $STEP \
+  DS:kbmemfree:GAUGE:1200:0:U \
+  DS:kbmemused:GAUGE:1200:0:U \
+  DS:pctmemused:GAUGE:1200:0:100 \
+  DS:kbbuffers:GAUGE:1200:0:U \
+  DS:kbcached:GAUGE:1200:0:U \
+  DS:kbcommit:GAUGE:1200:0:U \
+  DS:pctcommit:GAUGE:1200:0:100 \
+  RRA:AVERAGE:0.5:1:144 \
+  RRA:AVERAGE:0.5:3:1536 \
+  RRA:AVERAGE:0.5:12:4440

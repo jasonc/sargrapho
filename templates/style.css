@@ -1,0 +1,97 @@
+body {
+  font-family: arial, helvetica, sans-serif;
+}
+
+h1 {
+  font-size: large;
+}
+
+ul {
+  list-style-type:none;
+  padding: 0;
+  margin: 0;
+}
+
+li {
+  padding-left: 10px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+a:link, a:visited { 
+  color: #0000EE;
+}
+
+a img {
+  text-decoration: none;
+  outline: none;
+  border: 0 none transparent;
+}
+
+.odd, .even {
+  height:1.4em;
+  clear:both;
+}
+
+.odd {
+  background-color: #dfdfdf;
+}
+
+.even {
+  background-color: #efefef;
+}
+
+.last_updated {
+  font-size: small;
+  text-align: right;
+  float: right;
+}
+
+.sargrapho_link {
+  font-size: small;
+  text-align: center;
+  width: 250px; margin: 0 auto;
+}
+
+.footer {
+  clear: both;
+  padding-top: 20px;
+  width: 100%;
+}
+
+.nav {
+  font-size: small;
+}
+
+.footer .nav {
+  float:left;
+}
+
+#periods {
+  float:right;
+  width:49%;
+}
+
+.period {
+  width:16%;
+  float:left;
+  overflow:hidden;
+}
+
+#hosts {
+  float:left;
+  width:49%;
+}
+
+.hostname, .host {
+  overflow:hidden;
+  float:left;
+}
+
+.host {
+  width:11%;
+}
+
+.hostname {
+  width:45%;
+}

@@ -1,0 +1,124 @@
+#!/bin/bash
+
+trap on_exit EXIT
+
+on_exit () {
+  rm -f $IO_OUT_FILE $SWAP_OUT_FILE $RAM_OUT_FILE $LOAD_OUT_FILE $CPU_OUT_FILE
+}
+
+HOST=$1
+SSH_CMD="ssh -o StrictHostKeyChecking=no"
+RRDTOOL_ZERO_EXIT=true
+YESTERDAY=$(date --date 'yesterday' +%d)
+YESTERDAY_SA_FILE="/var/log/sa/sa${YESTERDAY}"
+HOST_RRD_OUTPUT_DIR="${RRD_OUTPUT_DIR}/${HOST}"
+
+SAR_VERSION=$(timeout -s 9 30 $SSH_CMD $HOST "sar -V" 2>&1 | grep version | awk '{print $NF}' | cut -d. -f1)
+
+# If SAR_VERSION is blank either sar isn't installed or a 
+# successful connection to the host was not made.
+[ -z $SAR_VERSION ] && exit 1
+
+OLD_SAR=false
+[ $SAR_VERSION -lt 9 ] && OLD_SAR=true
+
+# Get IOPs.
+IO_RRD_FILE=${HOST_RRD_OUTPUT_DIR}/io.rrd
+IO_OUT_FILE=$(mktemp)
+$SSH_CMD $HOST sadf -Dt $YESTERDAY_SA_FILE -- -b 2>/dev/null | egrep -vi "RESTART|timestamp" > $IO_OUT_FILE
+while read line
+do
+  # hostname;interval;timestamp;tps;rtps;wtps;bread/s;bwrtn/s
+  # linuxbox;592;1359522601;4119.75;1453.30;2666.45;22878.16;55927.33
+  TIMESTAMP=$( echo $line | cut -f3 -d';' )
+  tps=$(       echo $line | cut -f4 -d';' )
+  rtps=$(      echo $line | cut -f5 -d';' )
+  wtps=$(      echo $line | cut -f6 -d';' )
+  bread=$(     echo $line | cut -f7 -d';' )
+  bwrtn=$(     echo $line | cut -f8 -d';' )
+  rrdtool update $IO_RRD_FILE $TIMESTAMP:$tps:$rtps:$wtps:$bread:$bwrtn 2>/dev/null || RRDTOOL_ZERO_EXIT=false
+done < $IO_OUT_FILE
+
+# Get SWAP.
+SWAP_RRD_FILE=${HOST_RRD_OUTPUT_DIR}/swap.rrd
+SWAP_OUT_FILE=$(mktemp)
+if $OLD_SAR
+then
+  $SSH_CMD $HOST sadf -Dt $YESTERDAY_SA_FILE -- -r 2>/dev/null | egrep -vi "RESTART|timestamp" > $SWAP_OUT_FILE
+  while read line
+  do
+    # hostname;interval;timestamp;tps;rtps;wtps;bread/s;bwrtn/s
+    # linuxbox;600;1357103401;81637256;50291360;38.12;31024;48957720;67108856;0;0.00;0
+    TIMESTAMP=$(  echo $line | cut -f3  -d';' )
+    kbswpfree=$(  echo $line | cut -f9  -d';' )
+    kbswapused=$( echo $line | cut -f10 -d';' )
+    pctswpused=$( echo $line | cut -f11 -d';' )
+    kbswpcad=$(   echo $line | cut -f12 -d';' )
+    pctswpcad="U" # Unknown
+    rrdtool update $SWAP_RRD_FILE $TIMESTAMP:$kbswpfree:$kbswapused:$pctswpused:$kbswpcad:$pctswpcad 2>/dev/null || RRDTOOL_ZERO_EXIT=false
+  done < $SWAP_OUT_FILE
+else 
+  $SSH_CMD $HOST sadf -Dt $YESTERDAY_SA_FILE -- -S 2>/dev/null | egrep -vi "RESTART|timestamp" > $SWAP_OUT_FILE
+  while read line
+  do
+    # hostname;interval;timestamp;kbswpfree;kbswpused;%swpused;kbswpcad;%swpcad
+    # linuxbox;567;1356498601;41940876;2148;0.01;304;14.15
+    TIMESTAMP=$(  echo $line | cut -f3 -d';' )
+    kbswpfree=$(  echo $line | cut -f4 -d';' )
+    kbswapused=$( echo $line | cut -f5 -d';' )
+    pctswpused=$( echo $line | cut -f6 -d';' )
+    kbswpcad=$(   echo $line | cut -f7 -d';' )
+    pctswpcad=$(  echo $line | cut -f8 -d';' )
+    rrdtool update $SWAP_RRD_FILE $TIMESTAMP:$kbswpfree:$kbswapused:$pctswpused:$kbswpcad:$pctswpcad 2>/dev/null || RRDTOOL_ZERO_EXIT=false
+  done < $SWAP_OUT_FILE
+fi
+
+# Get RAM:
+RAM_RRD_FILE=${HOST_RRD_OUTPUT_DIR}/memory.rrd
+RAM_OUT_FILE=$(mktemp)
+$SSH_CMD $HOST sadf -Dt $YESTERDAY_SA_FILE -- -r 2>/dev/null | egrep -vi "RESTART|timestamp" > $RAM_OUT_FILE
+while read line
+do
+  # hostname;interval;timestamp;kbmemfree;kbmemused;%memused;kbbuffers;kbcached;kbcommit;%commit
+  # linuxbox;555;1356503401;9722600;89332520;90.18;148180;18316132;106451244;75.50
+  TIMESTAMP=$(  echo $line | cut -f3  -d';' )
+  kbmemfree=$(  echo $line | cut -f4  -d';' )
+  kbmemused=$(  echo $line | cut -f5  -d';' )
+  pctmemused=$( echo $line | cut -f6  -d';' )
+  kbbuffers=$(  echo $line | cut -f7  -d';' )
+  kbcached=$(   echo $line | cut -f8  -d';' )
+  kbcommit=$(   echo $line | cut -f9  -d';' )
+  pctcommit=$(  echo $line | cut -f10 -d';' )
+  rrdtool update $RAM_RRD_FILE $TIMESTAMP:$kbmemfree:$kbmemused:$pctmemused:$kbbuffers:$kbcached:$kbcommit:$pctcommit 2>/dev/null || RRDTOOL_ZERO_EXIT=false
+done < $RAM_OUT_FILE
+
+# Get LOAD:
+LOAD_RRD_FILE=${HOST_RRD_OUTPUT_DIR}/load.rrd
+LOAD_OUT_FILE=$(mktemp)
+$SSH_CMD $HOST sadf -Dt $YESTERDAY_SA_FILE -- -q 2>/dev/null | egrep -vi "RESTART|timestamp" > $LOAD_OUT_FILE
+while read line
+do
+  # hostname;interval;timestamp;runq-sz;plist-sz;ldavg-1;ldavg-5;ldavg-15
+  TIMESTAMP=$( echo $line | cut -f3 -d';' )
+  LOAD=$(      echo $line | cut -f6 -d';' )
+  rrdtool update $LOAD_RRD_FILE $TIMESTAMP:$LOAD 2>/dev/null || RRDTOOL_ZERO_EXIT=false
+done < $LOAD_OUT_FILE
+
+# Get CPU:
+CPU_RRD_FILE=${HOST_RRD_OUTPUT_DIR}/cpu.rrd
+CPU_OUT_FILE=$(mktemp)
+$SSH_CMD $HOST sadf -Dt $YESTERDAY_SA_FILE 2>/dev/null | egrep -vi "RESTART|timestamp" > $CPU_OUT_FILE
+while read line
+do
+  TIMESTAMP=$( echo $line | cut -f3  -d';' )
+  USER=$(      echo $line | cut -f5  -d';' )
+  NICE=$(      echo $line | cut -f6  -d';' )
+  SYSTEM=$(    echo $line | cut -f7  -d';' )
+  IOWAIT=$(    echo $line | cut -f8  -d';' )
+  STEAL=$(     echo $line | cut -f9  -d';' )
+  IDLE=$(      echo $line | cut -f10 -d';' )
+  rrdtool update $CPU_RRD_FILE $TIMESTAMP:$USER:$NICE:$SYSTEM:$IOWAIT:$STEAL:$IDLE 2>/dev/null || RRDTOOL_ZERO_EXIT=false
+done < $CPU_OUT_FILE
+
+$RRDTOOL_ZERO_EXIT || logit ERROR "rrdtool update exited with non zero status for ${HOST}."
+exit 0

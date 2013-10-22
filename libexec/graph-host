@@ -1,0 +1,143 @@
+#!/bin/bash
+
+HOST=$1
+RRDTOOL_ZERO_EXIT=true
+HOST_RRD_OUTPUT_DIR="${RRD_OUTPUT_DIR}/${HOST}"
+HOST_HTML_OUTPUT_DIR="${HTML_OUTPUT_DIR}/hosts/${HOST}"
+
+for PERIOD in $PERIODS
+do
+  # Use a smaller line size for month and year graphs
+  LINE="LINE2"
+  if [ "$PERIOD" == "year" ] || [ "$PERIOD" == "month" ]
+  then
+    LINE="LINE"
+  fi
+
+  # Just graph up to the last update to the rrd file.
+  END=$(rrdtool info ${HOST_RRD_OUTPUT_DIR}/cpu.rrd | grep last_update | awk '{print $NF}')
+  rrdtool graph ${HOST_HTML_OUTPUT_DIR}/cpu-${PERIOD}.png \
+    --title="CPU - ${PERIOD} - $HOST" \
+    --start="-1${PERIOD}" \
+    --end="${END}" \
+    --slope-mode \
+    --watermark="SarGraphO $(date)" \
+    --width=$GRAPH_WIDTH \
+    --height=$GRAPH_HEIGHT \
+    --vertical-label="Percent" \
+    -u 100 \
+    "DEF:user=${HOST_RRD_OUTPUT_DIR}/cpu.rrd:pctuser:AVERAGE" \
+    "DEF:nice=${HOST_RRD_OUTPUT_DIR}/cpu.rrd:pctnice:AVERAGE" \
+    "DEF:system=${HOST_RRD_OUTPUT_DIR}/cpu.rrd:pctsystem:AVERAGE" \
+    "DEF:iowait=${HOST_RRD_OUTPUT_DIR}/cpu.rrd:pctiowait:AVERAGE" \
+    "DEF:idle=${HOST_RRD_OUTPUT_DIR}/cpu.rrd:pctidle:AVERAGE" \
+    "CDEF:busy=100,idle,-" \
+    "AREA:idle#dddddd:Idle CPU" \
+    "AREA:busy#ee9999:Busy CPU" \
+    "${LINE}:user#0000ff:User CPU" \
+    "${LINE}:nice#ffff00:Nice CPU" \
+    "${LINE}:system#ff0000:System CPU" \
+    "${LINE}:iowait#00ff99:IO Wait CPU\l" \
+    "GPRINT:idle:LAST:Last Idle\: %2.1lf%%" \
+    "GPRINT:idle:MAX:Max Idle\: %2.1lf%%" \
+    "GPRINT:idle:MIN:Min Idle\: %2.1lf%%\l" \
+    "GPRINT:busy:LAST:Last Busy\: %2.1lf%%" \
+    "GPRINT:busy:MAX:Max Busy\: %2.1lf%%" \
+    "GPRINT:busy:MIN:Min Busy\: %2.1lf%%\l" > /dev/null 2>&1 || RRDTOOL_ZERO_EXIT=false
+
+
+  END=$(rrdtool info ${HOST_RRD_OUTPUT_DIR}/load.rrd | grep last_update | awk '{print $NF}')
+  rrdtool graph ${HOST_HTML_OUTPUT_DIR}/load-${PERIOD}.png \
+    --title="Load - ${PERIOD} - $HOST" \
+    --start="-1${PERIOD}" \
+    --end="${END}" \
+    --slope-mode \
+    --watermark="SarGraphO $(date)" \
+    --width=$GRAPH_WIDTH \
+    --height=$GRAPH_HEIGHT \
+    --vertical-label="load" \
+    "DEF:load=${HOST_RRD_OUTPUT_DIR}/load.rrd:ldavg:AVERAGE" \
+    "AREA:load#ee9999:Load Average\l" \
+    "GPRINT:load:LAST:Last\: %2.1lf" \
+    "GPRINT:load:MAX:Max\: %2.1lf" \
+    "GPRINT:load:MIN:Min\: %2.1lf\l" > /dev/null 2>&1 || RRDTOOL_ZERO_EXIT=false
+
+
+  END=$(rrdtool info ${HOST_RRD_OUTPUT_DIR}/memory.rrd | grep last_update | awk '{print $NF}')
+  rrdtool graph ${HOST_HTML_OUTPUT_DIR}/memory-${PERIOD}.png \
+    --title="Memory - ${PERIOD} - $HOST" \
+    --start="-1${PERIOD}" \
+    --end="${END}" \
+    --slope-mode \
+    --watermark="SarGraphO $(date)" \
+    --width=$GRAPH_WIDTH \
+    --height=$GRAPH_HEIGHT \
+    "DEF:kbmemused=${HOST_RRD_OUTPUT_DIR}/memory.rrd:kbmemused:AVERAGE" \
+    "DEF:kbmemfree=${HOST_RRD_OUTPUT_DIR}/memory.rrd:kbmemfree:AVERAGE" \
+    "CDEF:mbmemused=kbmemused,1024,*" \
+    "CDEF:mbmemfree=kbmemfree,1024,*" \
+    "DEF:kbbuffers=${HOST_RRD_OUTPUT_DIR}/memory.rrd:kbbuffers:AVERAGE" \
+    "DEF:kbcached=${HOST_RRD_OUTPUT_DIR}/memory.rrd:kbcached:AVERAGE" \
+    "CDEF:mbbuffers=kbbuffers,1024,*" \
+    "CDEF:mbcached=kbcached,1024,*" \
+    "CDEF:BuffersCacheFree=mbbuffers,mbcached,+,mbmemfree,+" \
+    "AREA:mbmemused#ee9999:Used" \
+    "AREA:BuffersCacheFree#dddddd:Free+Buffers+Cached" \
+    "${LINE}:mbcached#00ff00:Cached" \
+    "${LINE}:mbbuffers#00ffff:Buffers" \
+    "${LINE}:mbmemfree#0000ff:Free\l" \
+    "GPRINT:BuffersCacheFree:LAST:Last Free+Buffers+Cached\: %2.0lf%sB" \
+    "GPRINT:BuffersCacheFree:MAX:Max Free+Buffers+Cached\: %2.0lf%sB" \
+    "GPRINT:BuffersCacheFree:MIN:Min Free+Buffers+Cached\: %2.0lf%sB\l" \
+    "GPRINT:mbmemused:LAST:Last Used               \: %2.0lf%sB" \
+    "GPRINT:mbmemused:MAX:Max Used               \: %2.0lf%sB" \
+    "GPRINT:mbmemused:MIN:Min Used               \: %2.0lf%sB\l" > /dev/null 2>&1 || RRDTOOL_ZERO_EXIT=false
+
+
+  END=$(rrdtool info ${HOST_RRD_OUTPUT_DIR}/swap.rrd | grep last_update | awk '{print $NF}')
+  rrdtool graph ${HOST_HTML_OUTPUT_DIR}/swap-${PERIOD}.png \
+    --title="Swap - ${PERIOD} - $HOST" \
+    --start="-1${PERIOD}" \
+    --end="${END}" \
+    --slope-mode \
+    --watermark="SarGraphO $(date)" \
+    --width=$GRAPH_WIDTH \
+    --height=$GRAPH_HEIGHT \
+    "DEF:kbswpfree=${HOST_RRD_OUTPUT_DIR}/swap.rrd:kbswpfree:AVERAGE" \
+    "DEF:kbswpused=${HOST_RRD_OUTPUT_DIR}/swap.rrd:kbswpused:AVERAGE" \
+    "CDEF:mbswpused=kbswpused,1024,*" \
+    "CDEF:mbswpfree=kbswpfree,1024,*" \
+    "AREA:mbswpfree#dddddd:Free" \
+    "AREA:mbswpused#ee9999:Used\l" \
+    "GPRINT:mbswpfree:LAST:Last Free\: %2.0lf%sB" \
+    "GPRINT:mbswpfree:MAX:Max Free\: %2.0lf%sB" \
+    "GPRINT:mbswpfree:MIN:Min Free\: %2.0lf%sB\l" \
+    "GPRINT:mbswpused:LAST:Last Used\: %2.0lf%sB" \
+    "GPRINT:mbswpused:MAX:Max Used\: %2.0lf%sB" \
+    "GPRINT:mbswpused:MIN:Min Used\: %2.0lf%sB\l" > /dev/null 2>&1 || RRDTOOL_ZERO_EXIT=false
+
+
+  END=$(rrdtool info ${HOST_RRD_OUTPUT_DIR}/io.rrd | grep last_update | awk '{print $NF}')
+  rrdtool graph ${HOST_HTML_OUTPUT_DIR}/io-${PERIOD}.png \
+    --title="IO - ${PERIOD} - $HOST" \
+    --start="-1${PERIOD}" \
+    --end="${END}" \
+    --slope-mode \
+    --watermark="SarGraphO $(date)" \
+    --width=$GRAPH_WIDTH \
+    --height=$GRAPH_HEIGHT \
+    "DEF:tps=${HOST_RRD_OUTPUT_DIR}/io.rrd:tps:AVERAGE" \
+    "DEF:rtps=${HOST_RRD_OUTPUT_DIR}/io.rrd:rtps:AVERAGE" \
+    "DEF:wtps=${HOST_RRD_OUTPUT_DIR}/io.rrd:wtps:AVERAGE" \
+    "DEF:bread=${HOST_RRD_OUTPUT_DIR}/io.rrd:bread:AVERAGE" \
+    "DEF:bwrtn=${HOST_RRD_OUTPUT_DIR}/io.rrd:bwrtn:AVERAGE" \
+    "AREA:tps#ee9999:TPS" \
+    "${LINE}:rtps#0000ff:RTPS" \
+    "${LINE}:wtps#00ff99:WTPS\l" \
+    "GPRINT:tps:LAST:Last TPS - Transfers Per Second\: %2.0lf\l" \
+    "GPRINT:tps:MAX:Max  TPS - Transers Per Second\: %2.0lf\l" \
+    "GPRINT:tps:MIN:Min  TPS - Transers Per Second\: %2.0lf\l" > /dev/null 2>&1 || RRDTOOL_ZERO_EXIT=false
+done # PERIOD
+
+$RRDTOOL_ZERO_EXIT || logit ERROR "rrdtool graph exited with non zero status for ${HOST}."
+exit 0

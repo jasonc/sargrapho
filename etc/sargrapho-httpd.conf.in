@@ -1,0 +1,5 @@
+Alias /sargrapho THE_HTMLDIR
+<Directory THE_HTMLDIR>
+  Order allow,deny
+  Allow from all
+</Directory>

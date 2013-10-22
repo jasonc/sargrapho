@@ -1,0 +1,63 @@
+#!/bin/bash
+
+# Functions
+usage() {
+  echo "Usage: $0 [-h] [-v]" >&2
+  echo "SarGraphO collects and graphs sar data." >&2
+  echo "" >&2
+  echo "Arguments:" >&2
+  echo "  -h         Displays this message." >&2
+  echo "  -v         Display informational messages, not just error messages." >&2
+  exit
+}
+
+logit () {
+  LOG_LEVEL=$1
+  shift
+  MSG=$@
+  TIMESTAMP=$(date +"%Y-%m-%d %T")
+
+  # Only produce output if there is an ERROR or VERBOSE is true.
+  if [ $LOG_LEVEL = 'ERROR' ] || $VERBOSE
+  then
+    echo "${TIMESTAMP} ${THIS_HOST} ${PROGRAM_NAME}[${SARGRAPHO_PID}]: ${LOG_LEVEL} ${MSG}"
+  fi
+}
+export -f logit
+
+
+# Set the variables.
+export LIBEXEC_DIR="$(dirname $0)/../libexec"
+export CONF_FILE="${LIBEXEC_DIR}/../etc/sargrapho.conf"
+export TEMPLATE_DIR="${LIBEXEC_DIR}/../templates"
+export PERIODS='day week month year'
+export METRICS='cpu io load memory swap'
+export VERBOSE=false
+export THIS_HOST=$(uname -n)
+export PROGRAM_NAME="sargrapho"
+export SARGRAPHO_PID=$$
+
+
+# Parse the arguments.
+while getopts "vh" opt; do
+  case "${opt}" in
+    v)
+      export VERBOSE=true
+      ;;
+    *)
+      usage
+      ;;
+  esac
+done
+shift $((OPTIND-1))
+
+
+# Read the configuration.
+source $CONF_FILE || {
+  logit ERROR "Cannot read ${CONF_FILE}."
+  exit 1
+}
+export HTML_OUTPUT_DIR HOSTS_FILE RRD_OUTPUT_DIR STEP GRAPH_WIDTH GRAPH_HEIGHT
+
+
+$LIBEXEC_DIR/generate-html
