@@ -1,0 +1,45 @@
+#!/bin/bash
+
+# This script builds the SarGraphO RPM package.
+
+# Override with environmental variables.
+RELEASE=${RELEASE-'1'}
+PROJECT_URL=${PROJECT_URL-'https://github.com/jasonc/sargrapho'}
+PREFIX=${PREFIX-'/opt/sargrapho'}
+HTMLDIR=${HTMLDIR-'/var/www/html/sargrapho'}
+
+# Run as root
+[ $EUID -eq 0 ] || { SUDO=sudo; }
+
+# Do not disturb an existing installation.
+[ -d $PREFIX ] && {
+  echo "${PREFIX} already exists.  Exiting."
+  exit 1 
+}
+
+# Install SarGraphO
+curl -s https://raw.github.com/jasonc/sargrapho/master/bin/install.sh | $SUDO PREFIX=$PREFIX HTMLDIR=$HTMLDIR bash
+
+# Create an empty hosts file so it can be included as a config file in the package.
+cat /dev/null | $SUDO tee ${PREFIX}/etc/hosts
+
+# Grab the version.
+VERSION=$(${PREFIX}/bin/sargrapho -V | awk '{print $NF}')
+
+# Build the package.
+fpm -s dir \
+  -t rpm \
+  -a noarch \
+  -f \
+  --config-files ${PREFIX}/etc/hosts \
+  --config-files ${PREFIX}/etc/sargrapho-httpd.conf \
+  --config-files ${PREFIX}/etc/sargrapho.conf \
+  --description 'SarGraphO collects sar data, graphs it, and generates web pages to display the graphs.' \
+  --vendor SarGraphO \
+  -m SarGraphO \
+  -n sargrapho \
+  -d rrdtool \
+  --url $PROJECT_URL \
+  -v $VERSION \
+  --iteration $RELEASE \
+  $PREFIX
