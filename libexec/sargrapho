@@ -1,13 +1,19 @@
 #!/bin/bash
 
 # Functions
+version() {
+  echo "SarGraphO 1.0.0"
+  exit
+}
+
 usage() {
-  echo "Usage: $0 [-h] [-v]" >&2
+  echo "Usage: $0 [-h] [-v] [-V]" >&2
   echo "SarGraphO collects and graphs sar data." >&2
   echo "" >&2
   echo "Arguments:" >&2
   echo "  -h         Displays this message." >&2
-  echo "  -v         Display informational messages, not just error messages." >&2
+  echo "  -v         Displays informational messages, not just error messages." >&2
+  echo "  -V         Displays version information and exit." >&2
   exit
 }
 
@@ -39,10 +45,13 @@ export SARGRAPHO_PID=$$
 
 
 # Parse the arguments.
-while getopts "vh" opt; do
+while getopts "hvV" opt; do
   case "${opt}" in
     v)
       export VERBOSE=true
+      ;;
+    V)
+      version
       ;;
     *)
       usage
