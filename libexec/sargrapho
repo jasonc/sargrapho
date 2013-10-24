@@ -13,7 +13,7 @@ usage() {
   echo "Arguments:" >&2
   echo "  -h         Displays this message." >&2
   echo "  -v         Displays informational messages, not just error messages." >&2
-  echo "  -V         Displays version information and exit." >&2
+  echo "  -V         Displays version information and exits." >&2
   exit
 }
 
